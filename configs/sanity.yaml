@@ -19,5 +19,5 @@ lora:
 
 # Subsamples the dataset so this whole run finishes in well under a minute,
 # just to confirm the pipeline is wired correctly before a full run.
-debug_max_train: 50
+debug_max_train: 80
 debug_max_val: 20
