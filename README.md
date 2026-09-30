@@ -78,3 +78,5 @@ with `--build-arg TORCH_VARIANT=cu130` and add `--gpus all` to `docker run`.
 Each run appends one row to `<output_dir>/results.csv` with trainable
 parameters, validation accuracy and F1, training time, GPU memory, and the
 size of the adapter-only checkpoint.
+
+   Edited on GitHub.
