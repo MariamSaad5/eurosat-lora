@@ -1,0 +1,81 @@
+name: CI
+
+# When the workflow runs
+on:
+  push:
+    branches: [main, develop]      # every push to main or develop
+  pull_request:
+    branches: [main]               # every pull request that targets main
+  workflow_dispatch:               # a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  # Job 1: runs on main AND develop
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install CPU PyTorch
+        run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install the other dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run the tests
+        run: pytest -v
+
+  # Job 2: runs on main AND develop, only if the tests passed
+  build:
+    name: Build Docker image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t eurosat-lora:ci .
+
+      - name: Run the tests inside a container made from the image
+        run: >
+          docker run --rm
+          -v "$PWD/tests:/app/tests"
+          -v "$PWD/pytest.ini:/app/pytest.ini"
+          --entrypoint sh
+          eurosat-lora:ci
+          -c "pip install -q pytest && python -m pytest -q"
+
+      - name: Show the image size
+        run: docker image ls eurosat-lora:ci
+
+  # Job 3: runs ONLY on a push to main, only if the build passed
+  deploy:
+    name: Publish image to GitHub Container Registry
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push the image
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker build -t "$IMAGE:latest" -t "$IMAGE:${GITHUB_SHA::7}" .
+          docker push --all-tags "$IMAGE"

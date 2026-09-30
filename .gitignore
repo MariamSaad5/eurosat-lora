@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.pytest_cache/
+
+# Training outputs (never commit these)
+outputs/
+*.pt
+results.csv
+split_indices.json
+
+# Editors
+.vscode/

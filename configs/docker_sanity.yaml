@@ -1,0 +1,23 @@
+name: docker_sanity_check
+model_name: google/vit-base-patch16-224
+
+# Paths INSIDE the container. "docker run -v ..." connects them to real folders.
+data_dir: /data/EuroSAT_RGB
+output_dir: /outputs
+
+seed: 42
+batch_size: 8
+epochs: 1
+num_workers: 2
+lr: 0.001
+
+lora:
+  r: 4
+  alpha: 8
+  target_blocks: [11]
+  target_modules: ["query", "value"]
+  dropout: 0.0
+
+# Small subset so this finishes in minutes on CPU
+debug_max_train: 200
+debug_max_val: 100

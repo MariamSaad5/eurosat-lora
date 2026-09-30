@@ -1,0 +1,2 @@
+# Store text files with Linux line endings so they work inside Docker and CI
+* text=auto eol=lf

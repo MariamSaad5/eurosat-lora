@@ -1,0 +1,13 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pt
+outputs/
+results.csv
+.git/
+.github/
+.vscode/
+.pytest_cache/
+tests/
+kaggle/

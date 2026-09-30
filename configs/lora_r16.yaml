@@ -1,0 +1,20 @@
+name: lora_r16
+model_name: google/vit-base-patch16-224
+
+# Kaggle paths. Change data_dir if your attached dataset lives elsewhere
+# (it must be the folder that directly contains AnnualCrop/, Forest/, ...).
+data_dir: /kaggle/input/datasets/waseemalastal/eurosat-rgb-dataset/EuroSAT_RGB
+output_dir: /kaggle/working
+
+seed: 42
+batch_size: 16
+epochs: 3
+num_workers: 2
+lr: 0.001
+
+lora:
+  r: 16
+  alpha: 32
+  target_blocks: [9, 10, 11]
+  target_modules: ["query", "value"]
+  dropout: 0.0

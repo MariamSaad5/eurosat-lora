@@ -1,0 +1,6 @@
+torch
+torchvision
+transformers>=5.0
+scikit-learn
+pandas
+pyyaml

@@ -1,0 +1,23 @@
+name: sanity_check
+model_name: google/vit-base-patch16-224
+
+data_dir: /kaggle/input/datasets/waseemalastal/eurosat-rgb-dataset/EuroSAT_RGB
+output_dir: /kaggle/working
+
+seed: 42
+batch_size: 8
+epochs: 1
+num_workers: 2
+lr: 0.001
+
+lora:
+  r: 4
+  alpha: 8
+  target_blocks: [11]
+  target_modules: ["query", "value"]
+  dropout: 0.0
+
+# Subsamples the dataset so this whole run finishes in well under a minute,
+# just to confirm the pipeline is wired correctly before a full run.
+debug_max_train: 50
+debug_max_val: 20
