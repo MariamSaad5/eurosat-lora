@@ -1,0 +1,40 @@
+# Assignment 16: the inference API plus its monitoring stack.
+#   docker compose up -d --build
+#   API        http://localhost:8000/docs
+#   Prometheus http://localhost:9090
+#   Grafana    http://localhost:3000   (dashboard: "EuroSAT API monitoring")
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: eurosat-api:cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./outputs:/models:ro     # the INT8 model, read-only
+      - ./logs:/logs             # prediction log, read later by monitor.py
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    ports:
+      - "3000:3000"
+    environment:
+      # Local demo only: open the dashboards without logging in.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
