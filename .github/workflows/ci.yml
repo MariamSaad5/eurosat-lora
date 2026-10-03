@@ -58,6 +58,12 @@ jobs:
       - name: Show the image size
         run: docker image ls eurosat-lora:ci
 
+      - name: Build the inference API image
+        run: docker build -f Dockerfile.api -t eurosat-api:ci .
+
+      - name: Show the API image size
+        run: docker image ls eurosat-api:ci
+
   # Job 3: runs ONLY on a push to main, only if the build passed
   deploy:
     name: Publish image to GitHub Container Registry

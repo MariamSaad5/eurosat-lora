@@ -1,5 +1,6 @@
 import os
 import time
+from dataclasses import asdict
 
 import torch
 import torch.nn as nn
@@ -44,6 +45,11 @@ class BaseFineTuner:
         (e.g. LoRA rank) without touching run()."""
         return {}
 
+    def extra_checkpoint_fields(self) -> dict:
+        """Hook for subclasses to store whatever is needed to rebuild the
+        model later (e.g. LoRA rank and target layers) inside the checkpoint."""
+        return {}
+
     def run(self, train_loader, val_loader, class_names: list, verbose: bool = True) -> dict:
         cfg = self.config
         if verbose:
@@ -69,6 +75,13 @@ class BaseFineTuner:
         train_losses, val_losses, val_accs, val_f1s = [], [], [], []
         start_time = time.time()
 
+        # Best-model tracking: keep the checkpoint from the epoch with the
+        # lowest validation loss, not just whatever the last epoch produced.
+        os.makedirs(cfg.output_dir, exist_ok=True)
+        best_ckpt_path = os.path.join(cfg.output_dir, f"{cfg.name}_best.pt")
+        best_val_loss = float("inf")
+        best_epoch = None
+
         for epoch in range(cfg.epochs):
             train_loss, _, _ = run_one_epoch(model, train_loader, self.device, optimizer)
             val_loss, val_acc, val_f1 = run_one_epoch(model, val_loader, self.device, optimizer=None)
@@ -82,6 +95,25 @@ class BaseFineTuner:
                     f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} val_f1={val_f1:.4f}"
                 )
 
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_epoch = epoch + 1
+                torch.save(
+                    {
+                        "epoch": best_epoch,
+                        "val_loss": val_loss,
+                        "val_accuracy": val_acc,
+                        "val_f1": val_f1,
+                        "model_name": cfg.model_name,
+                        "class_names": class_names,
+                        "adapter_state_dict": self.get_checkpoint_state_dict(model),
+                        **self.extra_checkpoint_fields(),
+                    },
+                    best_ckpt_path,
+                )
+                if verbose:
+                    print(f"  -> new best model (val_loss={val_loss:.4f}), saved to {best_ckpt_path}")
+
         train_time_sec = time.time() - start_time
         gpu_mem_gb = (
             torch.cuda.max_memory_allocated(self.device) / (1024 ** 3)
@@ -92,10 +124,6 @@ class BaseFineTuner:
         full_size_mb = state_dict_size_mb(model.state_dict())
         checkpoint_state = self.get_checkpoint_state_dict(model)
         checkpoint_size_mb = state_dict_size_mb(checkpoint_state)
-
-        os.makedirs(cfg.output_dir, exist_ok=True)
-        ckpt_path = os.path.join(cfg.output_dir, f"{cfg.name}.pt")
-        torch.save(checkpoint_state, ckpt_path)
 
         result = {
             "name": cfg.name,
@@ -112,7 +140,9 @@ class BaseFineTuner:
             "train_time_sec": train_time_sec,
             "full_state_dict_size_mb": full_size_mb,
             "checkpoint_size_mb": checkpoint_size_mb,
-            "checkpoint_path": ckpt_path,
+            "best_epoch": best_epoch,
+            "best_val_loss": best_val_loss,
+            "checkpoint_path": best_ckpt_path,
         }
         result.update(self.extra_result_fields())
 
@@ -151,6 +181,9 @@ class LoRAFineTuner(BaseFineTuner):
 
     def get_checkpoint_state_dict(self, model: nn.Module) -> dict:
         return get_adapter_state_dict(model)
+
+    def extra_checkpoint_fields(self) -> dict:
+        return {"lora_config": asdict(self.config.lora)}
 
     def extra_result_fields(self) -> dict:
         lora_cfg = self.config.lora

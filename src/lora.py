@@ -98,3 +98,26 @@ def apply_lora_to_vit(
         p.requires_grad = True
 
     return model
+
+
+def merge_lora_weights(model: nn.Module) -> nn.Module:
+    """Folds every LoRALinear back into a plain nn.Linear, in place.
+
+    A LoRA layer computes base(x) + scaling * x @ A^T @ B^T, which is the
+    same as one linear layer with weight W_base + scaling * (B @ A). Doing
+    that addition once, ahead of time, gives a model that is a completely
+    ordinary ViT again: same outputs, no extra matrix multiplies, and
+    every layer is a plain nn.Linear that quantization tools understand.
+    """
+    for name, module in list(model.named_modules()):
+        if not isinstance(module, LoRALinear):
+            continue
+        base = module.base
+        merged = nn.Linear(base.in_features, base.out_features, bias=base.bias is not None)
+        with torch.no_grad():
+            merged.weight.copy_(base.weight + module.scaling * (module.lora_B @ module.lora_A))
+            if base.bias is not None:
+                merged.bias.copy_(base.bias)
+        parent_name, child_name = name.rsplit(".", 1)
+        setattr(model.get_submodule(parent_name), child_name, merged)
+    return model

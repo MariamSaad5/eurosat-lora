@@ -1,0 +1,29 @@
+# Inference image: serves the INT8 model with FastAPI. No training code,
+# no dataset, no GPU. Kept separate from the training Dockerfile on purpose.
+FROM python:3.11-slim
+
+# Pinned, because the INT8 functions we use (torch.ao.quantization) are
+# deprecated and could disappear in a later release. 2.14.1 is the version
+# the tests passed with.
+ARG TORCH_VERSION=2.14.1
+ARG TORCHVISION_VERSION=0.29.1
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    MODEL_PATH=/models/vit_lora_r16_int8.pt
+
+WORKDIR /app
+
+RUN pip install torch==${TORCH_VERSION} torchvision==${TORCHVISION_VERSION} \
+    --index-url https://download.pytorch.org/whl/cpu
+
+COPY requirements-api.txt .
+RUN pip install -r requirements-api.txt
+
+# Only the code the service needs. The model file is NOT copied in:
+# it is mounted at /models when the container runs (see README).
+COPY src/ src/
+COPY app/ app/
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
