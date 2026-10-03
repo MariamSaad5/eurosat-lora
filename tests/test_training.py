@@ -36,3 +36,34 @@ def test_adapter_checkpoint_only_holds_lora_and_classifier():
     keys = get_adapter_state_dict(model).keys()
     assert len(keys) > 0
     assert all("lora_" in k or k.startswith("classifier") for k in keys)
+
+
+def test_finetuner_saves_best_checkpoint_by_val_loss(tmp_path):
+    from src.config import ExperimentConfig, LoRAConfig
+    from src.finetuner import LoRAFineTuner
+
+    class TinyLoRAFineTuner(LoRAFineTuner):
+        # Same as LoRAFineTuner, but builds the tiny test ViT instead of
+        # downloading google/vit-base-patch16-224.
+        def build_model(self, class_names):
+            model = tiny_vit(num_labels=len(class_names))
+            lora = self.config.lora
+            return apply_lora_to_vit(model, lora.target_blocks, lora.target_modules, lora.r, lora.alpha)
+
+    config = ExperimentConfig(
+        name="tiny", model_name="tiny", data_dir="unused", output_dir=str(tmp_path),
+        epochs=3, lr=1e-2,
+        lora=LoRAConfig(r=4, alpha=8, target_blocks=[11], target_modules=["query", "value"]),
+    )
+    class_names = [f"c{i}" for i in range(10)]
+    result = TinyLoRAFineTuner(config, torch.device("cpu")).run(
+        _fake_loader(), _fake_loader(), class_names, verbose=False
+    )
+
+    ckpt = torch.load(result["checkpoint_path"])
+    assert result["checkpoint_path"].endswith("tiny_best.pt")
+    assert ckpt["epoch"] == result["best_epoch"]
+    assert ckpt["val_loss"] == result["best_val_loss"]
+    assert ckpt["class_names"] == class_names
+    assert ckpt["lora_config"]["r"] == 4
+    assert all("lora_" in k or k.startswith("classifier") for k in ckpt["adapter_state_dict"])
