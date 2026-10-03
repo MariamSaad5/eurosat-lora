@@ -11,3 +11,7 @@ results.csv
 .pytest_cache/
 tests/
 kaggle/
+logs/
+reports/
+monitoring_data/
+samples/

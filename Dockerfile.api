@@ -10,7 +10,8 @@ ARG TORCHVISION_VERSION=0.29.1
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    MODEL_PATH=/models/vit_lora_r16_int8.pt
+    MODEL_PATH=/models/vit_lora_r16_int8.pt \
+    PREDICTION_LOG=/logs/predictions.csv
 
 WORKDIR /app
 
@@ -22,6 +23,8 @@ RUN pip install -r requirements-api.txt
 
 # Only the code the service needs. The model file is NOT copied in:
 # it is mounted at /models when the container runs (see README).
+# Predictions are logged to /logs, which is also mounted from the host
+# so the log survives the container and monitor.py can read it.
 COPY src/ src/
 COPY app/ app/
 

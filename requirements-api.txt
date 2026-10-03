@@ -5,3 +5,5 @@ fastapi
 uvicorn
 python-multipart
 pillow
+prometheus-client
+prometheus-fastapi-instrumentator

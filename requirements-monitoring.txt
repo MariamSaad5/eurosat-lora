@@ -1,0 +1,3 @@
+# Only for monitor.py (Evidently reports). Not needed inside the API image.
+evidently
+pandas

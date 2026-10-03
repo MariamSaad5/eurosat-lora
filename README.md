@@ -3,8 +3,9 @@
 A manual (from scratch, no PEFT library) LoRA fine-tuning pipeline that adapts
 `google/vit-base-patch16-224` to EuroSAT RGB satellite image classification.
 The best adapter is merged into the ViT, quantized to INT8, and served by a
-FastAPI inference service running in Docker. The project is tested
-automatically with GitHub Actions.
+FastAPI inference service running in Docker, monitored for data drift, model
+performance and infrastructure health. The project is tested automatically
+with GitHub Actions.
 
 ## Repository structure
 
@@ -13,7 +14,12 @@ eurosat-lora/
 ├── main.py                  entry point: runs one experiment from a config
 ├── quantize.py              merges the best LoRA checkpoint and quantizes it to INT8
 ├── client.py                sends images to the running API and prints predictions
-├── app/main.py              FastAPI inference service (/health, /predict)
+├── make_drift.py            makes darker, blurred copies of images to simulate drift
+├── monitor.py               Evidently drift and performance reports from the prediction log
+├── docker-compose.yml       API + Prometheus + Grafana
+├── monitoring/              Prometheus config, Grafana datasource and dashboard
+├── app/main.py              FastAPI inference service (/health, /predict, /metrics)
+├── app/monitoring.py        image statistics, prediction log, Prometheus metrics
 ├── samples/                 20 EuroSAT test images (2 per class) for trying the API
 ├── src/
 │   ├── config.py            YAML config into ExperimentConfig / LoRAConfig
@@ -132,6 +138,60 @@ correctly, at about 250 ms per single-image request on a laptop (Docker Desktop)
   PyTorch 2.14.1, which is why that version is pinned in `Dockerfile.api`.
 - The model always picks one of the 10 EuroSAT classes, even for images that
   are not satellite tiles. Low confidence is the only warning sign.
+
+## Assignment 16: AI observability
+
+| What is monitored | How | Tool |
+|---|---|---|
+| Data drift | every request logs 6 image statistics (brightness, contrast, sharpness, mean red/green/blue); each batch is compared to a reference batch with statistical tests | Evidently |
+| Model performance | prediction drift (class mix, confidence) always; accuracy, precision, recall and confusion matrix when true labels are sent | Evidently, Prometheus |
+| Infrastructure | request rate, errors, latency, model inference time, CPU and memory of the API process | Prometheus + Grafana |
+
+The API writes one row per prediction to `logs/predictions.csv` and exposes
+metrics at `/metrics`. Labels are optional (`label` form field), because in
+real use the true answer often arrives late or never.
+
+### Running it
+
+```
+docker compose up -d --build                     # API :8000, Prometheus :9090, Grafana :3000
+
+python make_drift.py monitoring_data/current monitoring_data/drifted
+python client.py monitoring_data/reference --batch reference --quiet
+python client.py monitoring_data/current   --batch current   --quiet
+python client.py monitoring_data/drifted   --batch drifted   --quiet
+
+pip install -r requirements-monitoring.txt
+python monitor.py                                 # writes reports/monitoring_<batch>.html
+```
+
+`monitoring_data/` holds 300 validation images (reference) and 300 test images
+(current), exported from Kaggle; it is not committed. The Grafana dashboard
+"EuroSAT API monitoring" loads automatically.
+
+### Results
+
+| Batch (300 images each) | Dataset drift | Drifted columns | Mean confidence | Accuracy |
+|---|---|---|---|---|
+| reference (validation) | | | 0.972 | 98.0% |
+| current (test) | no | 0 of 8 | 0.973 | 96.3% |
+| drifted (same test images, 60% brightness + blur) | **yes** | 8 of 8 | 0.871 | 75.0% |
+
+The drifted images show the same scenes as the current batch, yet accuracy
+fell by 23 points compared with the reference. The input statistics, the
+falling confidence and the changed prediction mix all flagged the problem
+without needing labels.
+
+### Limitations
+
+- Drift is detected on 6 summary statistics, so changes they do not capture
+  (for example new kinds of land use that look similar on average) can be missed.
+- Each column test has a 5% false-alarm rate; the dataset-level verdict (at
+  least half the columns drifted) reduces, but does not remove, false alarms.
+- The drift scenario is simulated, and the batches are short; real monitoring
+  would compare rolling time windows of live traffic.
+- Grafana runs with anonymous admin access, which is fine on a laptop but not
+  for a shared deployment.
 
 ## Training results
 

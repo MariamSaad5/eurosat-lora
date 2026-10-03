@@ -13,3 +13,8 @@ split_indices.json
 
 # Editors
 .vscode/
+
+# Monitoring (Assignment 16): generated locally, not committed
+logs/
+reports/
+monitoring_data/
