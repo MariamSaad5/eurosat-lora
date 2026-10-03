@@ -1,0 +1,7 @@
+# Inference service only. PyTorch is installed separately (CPU build, pinned
+# version) in Dockerfile.api, the same way the training Dockerfile does it.
+transformers>=5.0
+fastapi
+uvicorn
+python-multipart
+pillow
